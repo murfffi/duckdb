@@ -789,9 +789,21 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 		return ADBC_STATUS_INVALID_ARGUMENT;
 	}
 	auto count = prepared_wrapper->statement->data->properties.parameter_count;
+
 	if (count == 0) {
-		count = 1;
+		// Special case for zero-parameter prepared statements: we return an empty schema
+		schema->format = "+s"; // struct apparently
+		schema->flags = 0;
+		schema->metadata = nullptr;
+		schema->name = "duckdb_query_result";
+		schema->dictionary = nullptr;
+		schema->n_children = 0;
+		schema->children = nullptr;
+		schema->release = nullptr;
+		schema->private_data = nullptr;	
+		return ADBC_STATUS_OK;
 	}
+
 	std::vector<duckdb_logical_type> types(count);
 	std::vector<std::string> owned_names(count);
 	duckdb::vector<const char *> names(count);
@@ -808,7 +820,6 @@ AdbcStatusCode StatementGetParameterSchema(struct AdbcStatement *statement, stru
 
 	duckdb_arrow_options arrow_options;
 	duckdb_connection_get_arrow_options(wrapper->connection, &arrow_options);
-
 	auto res = duckdb_to_arrow_schema(arrow_options, &types[0], names.data(), count, schema);
 
 	for (auto &type : types) {
